@@ -1,24 +1,62 @@
-import './style.css'
-import typescriptLogo from './typescript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.ts'
+// src/main.ts (Erweiterung)
+import * as PIXI from 'pixi.js';
+import { HexUtils } from './core/HexUtils';
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>Vite + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the Vite and TypeScript logos to learn more
-    </p>
-  </div>
-`
+async function init() {
+  const app = new PIXI.Application();
+  
+  await app.init({ 
+    background: '#1a1a1a', 
+    resizeTo: window,
+    antialias: true 
+  });
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+  document.body.appendChild(app.canvas);
+
+  const worldContainer = new PIXI.Container();
+  app.stage.addChild(worldContainer);
+
+  // Einstellungen für unser Gitter
+  const hexSize = 30; // Radius eines Hexagons
+  const mapRange = 5;  // Wie viele Ringe um das Zentrum
+
+  // Wir zeichnen die Hexagons
+  for (let q = -mapRange; q <= mapRange; q++) {
+    for (let r = -mapRange; r <= mapRange; r++) {
+      
+      // In einem axialen Gitter gilt: q + r + s = 0. 
+      // Wir müssen s berechnen, um zu prüfen, ob das Hex im Radius liegt.
+      const s = -q - r;
+      if (Math.abs(q) <= mapRange && Math.abs(r) <= mapRange && Math.abs(s) <= mapRange) {
+        
+        // Berechne die Pixel-Position mit unserer HexUtils
+        const { x, y } = HexUtils.hexToPixel(q, r, hexSize);
+        
+        // Zeichne das Hexagon
+        const graphics = new PIXI.Graphics();
+        graphics.lineStyle(2, 0x555555); // Graue Umrandung
+        graphics.beginFill(0x222222);    // Dunkler Hintergrund
+        
+        // Zeichne 6 Ecken
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i + (Math.PI / 6); // + PI/6 für "Pointy Top"
+          const cornerX = x + hexSize * Math.cos(angle);
+          const cornerY = y + hexSize * Math.sin(angle);
+          if (i === 0) graphics.moveTo(cornerX, cornerY);
+          else graphics.lineTo(cornerX, cornerY);
+        }
+        
+        graphics.closePath();
+        graphics.endFill();
+        
+        worldContainer.addChild(graphics);
+      }
+    }
+  }
+
+  // Zentriere das Gitter im Viewport
+  worldContainer.x = app.screen.width / 2;
+  worldContainer.y = app.screen.height / 2;
+}
+
+init();
