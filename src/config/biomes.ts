@@ -4,18 +4,64 @@ export interface Biome {
   name: string;
   threshold: number;
   color: number;
-  decoratorColor?: number;
+  tileAsset: string;      // Die Hex-Boden-Textur
+  decoAsset?: string;     // Das Deko-Objekt (Baum, Fels, etc.)
   decoratorDensity?: number;
 }
 
 export const BIOMES: Biome[] = [
-  { name: 'DEEP_WATER', threshold: 0,    color: 0x1a365d },
-  { name: 'WATER',      threshold: 0.35, color: 0x2b6cb0 },
-  { name: 'SAND',       threshold: 0.45, color: 0xed8936 },
-  { name: 'GRASS',      threshold: 0.52, color: 0x48bb78, decoratorColor: 0x2f855a, decoratorDensity: 1 },
-  { name: 'FOREST',     threshold: 0.65, color: 0x2f855a, decoratorColor: 0x1a4731, decoratorDensity: 3 },
-  { name: 'MOUNTAIN',   threshold: 0.82, color: 0x718096, decoratorColor: 0x4a5568, decoratorDensity: 2 },
-  { name: 'SNOW',       threshold: 0.92, color: 0xffffff, decoratorColor: 0xa0aec0, decoratorDensity: 1 },
+  { 
+    name: 'DEEP_WATER', 
+    threshold: 0,    
+    color: 0x1a365d, 
+    tileAsset: 'tile_ocean.png' 
+  },
+  { 
+    name: 'WATER',      
+    threshold: 0.35, 
+    color: 0x2b6cb0, 
+    tileAsset: 'tile_water.png' 
+  },
+  { 
+    name: 'SAND',       
+    threshold: 0.45, 
+    color: 0xed8936, 
+    tileAsset: 'tile_sand.png',
+    decoAsset: 'deco_cactus.png',
+    decoratorDensity: 1
+  },
+  { 
+    name: 'GRASS',      
+    threshold: 0.52, 
+    color: 0x48bb78, 
+    tileAsset: 'tile_grass.png',
+    decoAsset: 'deco_oak.png',
+    decoratorDensity: 1
+  },
+  { 
+    name: 'FOREST',     
+    threshold: 0.65, 
+    color: 0x2f855a, 
+    tileAsset: 'tile_forest.png',
+    decoAsset: 'deco_pine.png',
+    decoratorDensity: 3
+  },
+  { 
+    name: 'MOUNTAIN',   
+    threshold: 0.82, 
+    color: 0x718096, 
+    tileAsset: 'tile_mountain.png',
+    decoAsset: 'deco_rock.png',
+    decoratorDensity: 2
+  },
+  { 
+    name: 'SNOW',       
+    threshold: 0.92, 
+    color: 0xffffff, 
+    tileAsset: 'tile_snow.png',
+    decoAsset: 'deco_peak.png',
+    decoratorDensity: 1
+  },
 ];
 
 export function getBiome(value: number): Biome {
