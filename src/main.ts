@@ -12,6 +12,7 @@ import { bakeHexMaskedTexture, getHexDimensions } from './core/TextureBaker';
 const noise2D = createNoise2D();
 TextureStyle.defaultOptions.scaleMode = 'nearest';
 
+// --- GAME STATE ---
 const gameState = {
     resources: { wood: 200, stone: 50, iron: 20, food: 100 },
     workers: { total: 10, employed: 0 },
@@ -63,16 +64,28 @@ async function init() {
     const app = new PIXI.Application();
     await app.init({ background: '#050505', resizeTo: window, antialias: false });
     document.body.appendChild(app.canvas);
-    
+
+    // --- 1. HUD & LAYERS SETUP ---
+    const hud = new HUD();
+    const worldContainer = new PIXI.Container();
+    const groundLayer = new PIXI.Container();
+    const infraLayer = new PIXI.Container();
+    const interactionLayer = new PIXI.Container();
+    const uiLayer = new PIXI.Container();
+
+    worldContainer.addChild(groundLayer, infraLayer, interactionLayer);
+    // UI Layer nach dem World Container hinzufügen, damit es oben liegt
+    app.stage.addChild(worldContainer);
+    app.stage.addChild(uiLayer);
+    uiLayer.addChild(hud.getContainer());
+
     window.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         gameState.activeTool = 'none';
         hud.update(gameState, currentHoverText);
     });
 
-    const hud = new HUD();
-
-    // --- ASSETS ---
+    // --- 2. ASSETS LADEN ---
     const assetAliases = new Set<string>();
     BIOMES.forEach(b => { if (b.tileAsset) assetAliases.add(b.tileAsset); });
     assetAliases.add('castle_main.png'); 
@@ -87,23 +100,10 @@ async function init() {
         }
     });
 
-    const worldContainer = new PIXI.Container();
-    const groundLayer = new PIXI.Container();
-    const infraLayer = new PIXI.Container();
-    const interactionLayer = new PIXI.Container();
-    const uiLayer = new PIXI.Container();
-    worldContainer.addChild(groundLayer, infraLayer, interactionLayer);
-    app.stage.addChild(worldContainer, uiLayer);
-
-    const hoverHighlight = new Graphics();
-    hoverHighlight.lineStyle(2, 0xffffff, 0.5).drawCircle(0, 0, MAP_SETTINGS.hexSize * 0.8);
-    hoverHighlight.visible = false;
-    interactionLayer.addChild(hoverHighlight);
-
     const hexDataMap = new Map<string, WorldTileData>();
     const tileSprites = new Map<string, PIXI.Sprite>();
 
-    // --- GENERATION MIT FIX FÜR DEINE NAMEN ---
+    // --- 3. WELT GENERIERUNG ---
     const startQ = MAP_SETTINGS.castleStart.q - Math.floor(MAP_SETTINGS.castleStart.r / 2);
     const startR = MAP_SETTINGS.castleStart.r;
 
@@ -111,25 +111,19 @@ async function init() {
         for (let q = 0; q < MAP_SETTINGS.mapWidth; q++) {
             const axialQ = q - Math.floor(r / 2);
             const axialR = r;
-            
             let val = (noise2D(axialQ * MAP_SETTINGS.noiseScale, axialR * MAP_SETTINGS.noiseScale) + 1) / 2;
             let biome = getBiome(val);
 
-            // 1. BURG-SICHERUNG: Nutzt deine Namen 'DEEP_WATER', 'WATER' und 'GRASS'
+            // Startbereich sichern (kein Wasser unter der Burg)
             const dq = axialQ - startQ;
             const dr = axialR - startR;
             const dist = (Math.abs(dq) + Math.abs(dq + dr) + Math.abs(dr)) / 2;
-            
-            if (dist <= 3) {
-                if (biome.name === 'DEEP_WATER' || biome.name === 'WATER') {
-                    // Erzwinge Land (GRASS) aus deiner BIOMES Liste
-                    biome = BIOMES.find(b => b.name === 'GRASS') || biome;
-                }
+            if (dist <= 3 && (biome.name === 'DEEP_WATER' || biome.name === 'WATER')) {
+                biome = BIOMES.find(b => b.name === 'GRASS') || biome;
             }
 
             const { x, y } = HexUtils.hexToPixel(axialQ, axialR, MAP_SETTINGS.hexSize);
             const isCastleStart = (axialQ === startQ && axialR === startR);
-            
             const tileData: WorldTileData = {
                 q: axialQ, r: axialR, x, y,
                 biome,
@@ -149,9 +143,8 @@ async function init() {
         }
     }
 
-    // --- TOOLBAR ---
+    // --- 4. TOOLBAR ---
     function createToolbar() {
-        uiLayer.removeChildren();
         const toolbar = new Container();
         const tools = [
             { id: 'road', label: 'STRASSE', color: 0x999999 },
@@ -180,15 +173,12 @@ async function init() {
     }
     createToolbar();
 
-    // --- VISUAL UPDATES ---
+    // --- 5. VISUAL UPDATES ---
     function updateVisibility() {
         hexDataMap.forEach(tile => { if (tile.fogStatus === 'visible') tile.fogStatus = 'seen'; });
         hexDataMap.forEach(tile => {
             if (tile.infrastructure !== 'none' || tile.hasWorker) {
-                let visR = 1;
-                if (tile.infrastructure === 'castle') visR = 5;
-                else if (tile.infrastructure === 'camp') visR = 3;
-                else if (tile.hasWorker) visR = 2;
+                let visR = tile.infrastructure === 'castle' ? 5 : (tile.infrastructure === 'camp' ? 3 : 2);
                 getTilesInRadius(tile.q, tile.r, visR).forEach(pos => {
                     const t = hexDataMap.get(`${pos.q},${pos.r}`);
                     if (t) t.fogStatus = 'visible';
@@ -197,11 +187,7 @@ async function init() {
         });
         hexDataMap.forEach(tile => {
             const s = tileSprites.get(`${tile.q},${tile.r}`);
-            if (s) {
-                if (tile.fogStatus === 'visible') s.tint = 0xffffff;
-                else if (tile.fogStatus === 'seen') s.tint = 0x333333;
-                else s.tint = 0x000000;
-            }
+            if (s) s.tint = tile.fogStatus === 'visible' ? 0xffffff : (tile.fogStatus === 'seen' ? 0x333333 : 0x000000);
         });
     }
 
@@ -212,12 +198,10 @@ async function init() {
             if (tile.infrastructure === 'road') {
                 const r = new Graphics().beginFill(0x444444).drawCircle(0, 0, 6).endFill();
                 r.position.set(tile.x, tile.y); infraLayer.addChild(r);
-            }
-            if (tile.infrastructure === 'camp') {
+            } else if (tile.infrastructure === 'camp') {
                 const b = new Graphics().beginFill(0xFFA500).lineStyle(2, 0xffffff).drawRect(-12, -12, 24, 24).endFill();
                 b.position.set(tile.x, tile.y); infraLayer.addChild(b);
-            }
-            if (tile.infrastructure === 'castle') {
+            } else if (tile.infrastructure === 'castle') {
                 const c = new PIXI.Sprite(loadedAssets['castle_main.png']);
                 c.anchor.set(0.5, 0.8); c.position.set(tile.x, tile.y);
                 c.height = 60; c.scale.x = c.scale.y; infraLayer.addChild(c);
@@ -230,9 +214,7 @@ async function init() {
         });
     }
 
-    updateVisibility(); updateInfraView();
-
-    // --- INTERACTION MIT FIX FÜR WASSER-SPERRE ---
+    // --- 6. INTERACTION & INPUT ---
     app.stage.eventMode = 'static';
     app.stage.on('pointertap', (e) => {
         if (e.button !== 0) return;
@@ -240,87 +222,79 @@ async function init() {
         const q = Math.round((Math.sqrt(3)/3 * localPos.x - 1/3 * localPos.y) / MAP_SETTINGS.hexSize);
         const r = Math.round((2/3 * localPos.y) / MAP_SETTINGS.hexSize);
         const tile = hexDataMap.get(`${q},${r}`);
-        
-        if (!tile || (tile.fogStatus === 'unseen' && gameState.activeTool !== 'none')) return;
-
-        // 2. WASSER-CHECK: Nutzt exakt DEEP_WATER und WATER
-        const isWater = (tile.biome.name === 'WATER' || tile.biome.name === 'DEEP_WATER');
+        if (!tile || (tile.fogStatus === 'unseen' && gameState.activeTool === 'none')) return;
 
         if (gameState.activeTool === 'road' || gameState.activeTool === 'camp') {
-            if (isWater) {
-                console.warn("BAU VERBOTEN auf " + tile.biome.name);
-                return; 
-            }
-            
-            const cost = gameState.activeTool === 'road' ? BUILDINGS.road.cost.wood : BUILDINGS.camp.cost.wood;
+            if (tile.biome.name.includes('WATER')) return;
+            const cost = gameState.activeTool === 'road' ? 10 : 50;
             if (tile.infrastructure === 'none' && gameState.resources.wood >= cost) {
-                if (gameState.activeTool === 'road') {
-                    if (getNeighbors(q, r).some(n => hexDataMap.get(`${n.q},${n.r}`)?.infrastructure !== 'none')) {
-                        gameState.resources.wood -= cost; tile.infrastructure = 'road';
-                    }
-                } else {
+                if (gameState.activeTool === 'road' && getNeighbors(q, r).some(n => hexDataMap.get(`${n.q},${n.r}`)?.infrastructure !== 'none')) {
+                    gameState.resources.wood -= cost; tile.infrastructure = 'road';
+                } else if (gameState.activeTool === 'camp') {
                     const d = getPathDistanceToBuilding(q, r, hexDataMap);
-                    if (d >= 3 && d !== Infinity) { 
-                        gameState.resources.wood -= cost; tile.infrastructure = 'camp'; 
-                    }
+                    if (d >= 3 && d !== Infinity) { gameState.resources.wood -= cost; tile.infrastructure = 'camp'; }
                 }
             }
-        } else if (gameState.activeTool === 'worker_add') {
-            if (!tile.hasWorker && gameState.workers.employed < gameState.workers.total) {
-                if (getNeighbors(q, r).some(n => {
-                    const nt = hexDataMap.get(`${n.q},${n.r}`);
-                    return nt && (nt.infrastructure === 'castle' || nt.infrastructure === 'camp');
-                })) { tile.hasWorker = true; }
-            }
-        } else if (gameState.activeTool === 'worker_remove') { tile.hasWorker = false; }
-        else if (gameState.activeTool === 'demolish' && tile.infrastructure !== 'castle') { 
-            tile.infrastructure = 'none'; tile.hasWorker = false; 
-        }
+        } else if (gameState.activeTool === 'worker_add' && !tile.hasWorker && gameState.workers.employed < gameState.workers.total) {
+            if (getNeighbors(q, r).some(n => ['castle', 'camp'].includes(hexDataMap.get(`${n.q},${n.r}`)?.infrastructure || ''))) tile.hasWorker = true;
+        } else if (gameState.activeTool === 'worker_remove') tile.hasWorker = false;
+        else if (gameState.activeTool === 'demolish' && tile.infrastructure !== 'castle') { tile.infrastructure = 'none'; tile.hasWorker = false; }
 
         updateVisibility(); updateInfraView();
         hud.update(gameState, currentHoverText);
     });
 
-    // --- RESOURCE TICKER ---
+    // --- 7. RESSOURCEN TICKER (Wirtschaftssystem Prio 2) ---
     setInterval(() => {
-        let count = 0;
-        let foodGen = 0;
+        let activeWorkers = 0;
+        let income = { wood: 0, stone: 0, iron: 0, food: 0 };
         hexDataMap.forEach(tile => {
             if (tile.hasWorker) {
-                count++;
-                const b = tile.biome.name;
-                if (b === 'WATER' || b === 'DEEP_WATER') foodGen += 2;
-                else if (b === 'FOREST') { gameState.resources.wood += 1; foodGen += 0.2; }
-                else if (b === 'MOUNTAIN') { gameState.resources.iron += 0.5; gameState.resources.stone += 0.5; }
-                else if (b === 'GRASS') { foodGen += 1; }
+                activeWorkers++;
+                switch (tile.biome.name) {
+                    case 'GRASS': income.food += 1.0; gameState.resources.stone += 0.2; break;
+                    case 'FOREST': gameState.resources.wood += 1.0; income.food += 0.2; break;
+                    case 'MOUNTAIN': gameState.resources.iron += 0.5; gameState.resources.stone += 0.8; break;
+                    case 'SAND': gameState.resources.stone += 0.1; break;
+                    case 'WATER': case 'DEEP_WATER': income.food += 2.0; break;
+                }
             }
         });
-        gameState.resources.food += (foodGen - (count * 0.5));
+        gameState.resources.wood += income.wood;
+        gameState.resources.stone += income.stone;
+        gameState.resources.iron += income.iron;
+        gameState.resources.food += (income.food - (activeWorkers * 0.5));
         if (gameState.resources.food < 0) gameState.resources.food = 0;
-        gameState.workers.employed = count;
+        gameState.workers.employed = activeWorkers;
         hud.update(gameState, currentHoverText);
     }, 1000);
 
-    // --- CAMERA ---
-    let isDrag = false, dS = { x: 0, y: 0 }, cS = { x: 0, y: 0 };
+    // --- 8. KAMERA & ZOOM ---
+    let isDrag = false, dragStart = { x: 0, y: 0 }, camStart = { x: 0, y: 0 };
     app.stage.on('pointerdown', (e) => { 
         if(e.button === 0 && gameState.activeTool === 'none') { 
-            isDrag = true; dS = { x: e.global.x, y: e.global.y }; cS = { x: worldContainer.x, y: worldContainer.y }; 
+            isDrag = true; dragStart = { x: e.global.x, y: e.global.y }; camStart = { x: worldContainer.x, y: worldContainer.y }; 
         }
     });
-    app.stage.on('pointermove', (e) => { if (isDrag) { worldContainer.x = cS.x + (e.global.x - dS.x); worldContainer.y = cS.y + (e.global.y - dS.y); }});
+    app.stage.on('pointermove', (e) => { if (isDrag) { worldContainer.x = camStart.x + (e.global.x - dragStart.x); worldContainer.y = camStart.y + (e.global.y - dragStart.y); }});
     app.stage.on('pointerup', () => isDrag = false);
+
     app.canvas.addEventListener('wheel', (e: WheelEvent) => {
         e.preventDefault();
-        const zoom = Math.pow(1.1, -e.deltaY * 0.001);
-        const next = worldContainer.scale.x * zoom;
-        if (next > 0.1 && next < 3) {
-            const lp = worldContainer.toLocal({x: e.clientX, y: e.clientY});
-            worldContainer.scale.set(next);
-            const ng = worldContainer.toGlobal(lp);
-            worldContainer.x += e.clientX - ng.x; worldContainer.y += e.clientY - ng.y;
+        const zoomFactor = Math.pow(1.1, -e.deltaY * 0.01);
+        const nextScale = worldContainer.scale.x * zoomFactor;
+        if (nextScale > 0.1 && nextScale < 3) {
+            const mousePos = { x: e.clientX, y: e.clientY };
+            const localPos = worldContainer.toLocal(mousePos);
+            worldContainer.scale.set(nextScale);
+            const newMousePos = worldContainer.toGlobal(localPos);
+            worldContainer.x += mousePos.x - newMousePos.x;
+            worldContainer.y += mousePos.y - newMousePos.y;
         }
     }, { passive: false });
+
+    updateVisibility(); updateInfraView();
+    hud.update(gameState, "Willkommen!");
 }
 
 init();
