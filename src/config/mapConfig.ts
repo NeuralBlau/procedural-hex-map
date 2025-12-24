@@ -5,8 +5,24 @@ export const MAP_SETTINGS = {
     mapWidth: 120,
     mapHeight: 80,
     noiseScale: 0.06,
-    overlap: 1.02 // Der kleine Puffer gegen Seams
+    overlap: 1.02,
+    tickRate: 1000 // 1000ms = 1 Sekunde
 };
+
+export type InfrastructureType = 'none' | 'road' | 'castle' | 'tower';
+export type FogStatus = 'unseen' | 'seen' | 'visible';
+
+export interface WorldTileData {
+    q: number;
+    r: number;
+    x: number;
+    y: number;
+    biome: any;
+    infrastructure: InfrastructureType;
+    hasWorker: boolean;
+    fogStatus: FogStatus;
+    resourceType: 'wood' | 'stone' | 'iron' | 'none';
+}
 
 export const BAKE_OFFSETS: Record<string, { x: number; y: number }> = {
     'tile_water.png': { x: 1, y: 1 },
