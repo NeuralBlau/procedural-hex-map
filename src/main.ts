@@ -1,12 +1,11 @@
 // src/main.ts
 import * as PIXI from 'pixi.js';
-import { Color, TextureStyle } from 'pixi.js';
+import { TextureStyle, Graphics, Text, Container } from 'pixi.js';
 import { HexUtils } from './core/HexUtils';
 import { createNoise2D } from 'simplex-noise';
 import { getBiome, BIOMES } from './config/biomes';
-
-// src/main.ts
-import { MAP_SETTINGS, type WorldTileData } from './config/mapConfig';
+import { MAP_SETTINGS, type WorldTileData, type InfrastructureType } from './config/mapConfig';
+import { BUILDINGS } from './config/buildings';
 import { HUD } from './ui/HUD';
 import { bakeHexMaskedTexture, getHexDimensions } from './core/TextureBaker';
 
@@ -15,28 +14,55 @@ TextureStyle.defaultOptions.scaleMode = 'nearest';
 
 // --- GAME STATE ---
 const gameState = {
-    resources: { wood: 50, stone: 10, iron: 0 },
-    workers: { total: 5, employed: 0 },
-    castleLevel: 1
+    resources: { wood: 100, stone: 20, iron: 10 },
+    workers: { total: 10, employed: 0 },
+    // Expliziter Cast, um TypeScript-Fehler beim Vergleich mit 'none' zu verhindern
+    activeTool: 'none' as 'road' | 'worker_add' | 'worker_remove' | 'demolish' | 'none'
 };
+
+let currentHoverText = "";
+
+// --- HELPERS ---
+function getNeighbors(q: number, r: number) {
+    return [
+        { q: q + 1, r: r }, { q: q - 1, r: r },
+        { q: q, r: r + 1 }, { q: q, r: r - 1 },
+        { q: q + 1, r: r - 1 }, { q: q - 1, r: r + 1 }
+    ];
+}
+
+function getTilesInRadius(centerQ: number, centerR: number, radius: number) {
+    const results = [];
+    for (let q = -radius; q <= radius; q++) {
+        for (let r = Math.max(-radius, -q - radius); r <= Math.min(radius, -q + radius); r++) {
+            results.push({ q: centerQ + q, r: centerR + r });
+        }
+    }
+    return results;
+}
 
 async function init() {
     const app = new PIXI.Application();
-    await app.init({ background: '#0a0a0a', resizeTo: window, antialias: false });
+    await app.init({ background: '#050505', resizeTo: window, antialias: false });
     document.body.appendChild(app.canvas);
+    
+    // Rechtsklick zum Abwählen des Werkzeugs
+    window.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        gameState.activeTool = 'none';
+        hud.update(gameState, currentHoverText);
+    });
 
     const hud = new HUD();
 
-    // Assets laden
+    // --- ASSETS ---
     const assetAliases = new Set<string>();
-    BIOMES.forEach(b => {
-        if ((b as any).tileAsset) assetAliases.add((b as any).tileAsset);
-        if ((b as any).decoAsset) assetAliases.add((b as any).decoAsset);
-    });
+    BIOMES.forEach(b => { if ((b as any).tileAsset) assetAliases.add((b as any).tileAsset); });
+    assetAliases.add('castle_main.png'); 
     for (const alias of assetAliases) PIXI.Assets.add({ alias, src: `/assets/${alias}` });
     const loadedAssets = await PIXI.Assets.load([...assetAliases]);
 
-    // Baking
+    // --- BAKING ---
     const tileCache = new Map<string, PIXI.Texture>();
     const { w: hexW, h: hexH } = getHexDimensions(MAP_SETTINGS.hexSize);
     BIOMES.forEach(biome => {
@@ -46,17 +72,25 @@ async function init() {
         }
     });
 
+    // --- LAYERS ---
     const worldContainer = new PIXI.Container();
     const groundLayer = new PIXI.Container();
-    const decoLayer = new PIXI.Container();
-    decoLayer.sortableChildren = true;
-    worldContainer.addChild(groundLayer, decoLayer);
-    app.stage.addChild(worldContainer);
+    const infraLayer = new PIXI.Container();
+    const interactionLayer = new PIXI.Container();
+    const uiLayer = new PIXI.Container();
 
-    const animatedDecos: PIXI.Sprite[] = [];
+    worldContainer.addChild(groundLayer, infraLayer, interactionLayer);
+    app.stage.addChild(worldContainer, uiLayer);
+
+    const hoverHighlight = new Graphics();
+    hoverHighlight.lineStyle(2, 0xffffff, 0.5).drawCircle(0, 0, MAP_SETTINGS.hexSize * 0.8);
+    hoverHighlight.visible = false;
+    interactionLayer.addChild(hoverHighlight);
+
     const hexDataMap = new Map<string, WorldTileData>();
+    const tileSprites = new Map<string, PIXI.Sprite>();
 
-    // --- MAP GENERIERUNG ---
+    // --- GENERATION ---
     for (let r = 0; r < MAP_SETTINGS.mapHeight; r++) {
         for (let q = 0; q < MAP_SETTINGS.mapWidth; q++) {
             const axialQ = q - Math.floor(r / 2);
@@ -64,118 +98,199 @@ async function init() {
             const val = (noise2D(axialQ * MAP_SETTINGS.noiseScale, axialR * MAP_SETTINGS.noiseScale) + 1) / 2;
             const biome = getBiome(val);
             const { x, y } = HexUtils.hexToPixel(axialQ, axialR, MAP_SETTINGS.hexSize);
+            const startQ = MAP_SETTINGS.castleStart.q - Math.floor(MAP_SETTINGS.castleStart.r / 2);
+            const isCastleStart = (axialQ === startQ && axialR === MAP_SETTINGS.castleStart.r);
 
-            // Ressourcen-Typ basierend auf Biom zuweisen
-            let res: 'wood' | 'stone' | 'iron' | 'none' = 'none';
-            if (biome.name === 'Forest' || biome.name === 'Snowy Forest') res = 'wood';
-            else if (biome.name === 'Mountain') res = 'iron';
-            else if (biome.name === 'Grassland') res = 'stone';
-
-            // Tile-Logik-Daten
             const tileData: WorldTileData = {
                 q: axialQ, r: axialR, x, y,
                 biome,
-                infrastructure: 'none',
-                hasWorker: Math.random() > 0.98, // Testweise ein paar Arbeiter verteilen
-                fogStatus: 'visible',
-                resourceType: res
+                infrastructure: isCastleStart ? 'castle' : 'none',
+                hasWorker: false,
+                fogStatus: 'unseen',
+                resourceType: 'none'
             };
             hexDataMap.set(`${axialQ},${axialR}`, tileData);
 
-            // Grafische Darstellung
-            const bakedTex = tileCache.get(biome.tileAsset);
-            if (bakedTex) {
-                const tile = new PIXI.Sprite(bakedTex);
-                tile.anchor.set(0.5);
-                tile.position.set(x, y);
-                tile.width = hexW * MAP_SETTINGS.overlap;
-                tile.height = hexH * MAP_SETTINGS.overlap;
-                groundLayer.addChild(tile);
-            }
-
-            // Dekorationen (wie vorher)
-            const decoAsset = (biome as any).decoAsset;
-            if (decoAsset && (biome as any).decoratorDensity > 0) {
-                const tex = loadedAssets[decoAsset];
-                for (let i = 0; i < (biome as any).decoratorDensity; i++) {
-                    const deco = new PIXI.Sprite(tex);
-                    deco.anchor.set(0.5, 0.95);
-                    deco.position.set(x + (Math.random()-0.5)*hexW*0.5, y + (Math.random()-0.5)*hexH*0.3);
-                    deco.scale.set(((hexH * 0.45) / tex.height) * (0.8 + Math.random() * 0.4));
-                    deco.zIndex = deco.y;
-                    animatedDecos.push(deco);
-                    decoLayer.addChild(deco);
-                }
-            }
+            const sprite = new PIXI.Sprite(tileCache.get(biome.tileAsset));
+            sprite.anchor.set(0.5); sprite.position.set(x, y);
+            sprite.width = hexW * MAP_SETTINGS.overlap; sprite.height = hexH * MAP_SETTINGS.overlap;
+            sprite.tint = 0x000000;
+            groundLayer.addChild(sprite);
+            tileSprites.set(`${axialQ},${axialR}`, sprite);
         }
     }
 
-    // Zentrierung
-    worldContainer.x = app.screen.width / 2;
-    worldContainer.y = app.screen.height / 2;
+    // --- TOOLBAR ---
+    function createToolbar() {
+        uiLayer.removeChildren();
+        const toolbar = new Container();
+        const tools = [
+            { id: 'road', label: 'STRASSE', color: 0x999999 },
+            { id: 'worker_add', label: '+ ARBEITER', color: 0xFFD700 },
+            { id: 'worker_remove', label: '- ARBEITER', color: 0xFF4500 },
+            { id: 'demolish', label: 'ABRISS', color: 0xaa0000 }
+        ];
 
-    // --- TICK SYSTEM (Das Herz des Spiels) ---
-    setInterval(() => {
-        let workersCurrentlyActive = 0;
-        
-        hexDataMap.forEach((tile) => {
-            if (tile.hasWorker) {
-                workersCurrentlyActive++;
-                // Einfache Produktionslogik
-                if (tile.resourceType === 'wood') gameState.resources.wood += 1;
-                if (tile.resourceType === 'stone') gameState.resources.stone += 0.5;
-                if (tile.resourceType === 'iron') gameState.resources.iron += 0.2;
+        tools.forEach((t, i) => {
+            const btn = new Container();
+            btn.position.set(i * 125, 0);
+            btn.eventMode = 'static'; btn.cursor = 'pointer';
+            const bg = new Graphics().beginFill(0x222222).lineStyle(2, t.color).drawRoundedRect(0, 0, 110, 40, 5).endFill();
+            const txt = new Text({ text: t.label, style: { fill: 0xffffff, fontSize: 12, fontWeight: 'bold' } });
+            txt.anchor.set(0.5); txt.position.set(55, 20);
+            btn.addChild(bg, txt);
+            
+            btn.on('pointertap', (e) => { 
+                e.stopPropagation(); 
+                gameState.activeTool = (gameState.activeTool === t.id) ? 'none' : (t.id as any);
+                hud.update(gameState, currentHoverText);
+            });
+            toolbar.addChild(btn);
+        });
+        toolbar.position.set(app.screen.width / 2 - toolbar.width / 2, app.screen.height - 70);
+        uiLayer.addChild(toolbar);
+    }
+    createToolbar();
+
+    // --- LOGIC UPDATES ---
+    function updateVisibility() {
+        hexDataMap.forEach(tile => { if (tile.fogStatus === 'visible') tile.fogStatus = 'seen'; });
+        hexDataMap.forEach(tile => {
+            if (tile.infrastructure !== 'none' || tile.hasWorker) {
+                let visRadius = 1; 
+                let seenRadius = 1; 
+
+                if (tile.infrastructure === 'castle') { visRadius = 5; seenRadius = 2; }
+                else if (tile.hasWorker) { visRadius = 2; seenRadius = 1; }
+                else if (tile.infrastructure === 'road') { visRadius = 1; seenRadius = 1; }
+
+                getTilesInRadius(tile.q, tile.r, visRadius).forEach(pos => {
+                    const t = hexDataMap.get(`${pos.q},${pos.r}`);
+                    if (t) t.fogStatus = 'visible';
+                });
+                getTilesInRadius(tile.q, tile.r, visRadius + seenRadius).forEach(pos => {
+                    const t = hexDataMap.get(`${pos.q},${pos.r}`);
+                    if (t && t.fogStatus === 'unseen') t.fogStatus = 'seen';
+                });
             }
         });
+        hexDataMap.forEach(tile => {
+            const s = tileSprites.get(`${tile.q},${tile.r}`);
+            if (s) {
+                if (tile.fogStatus === 'visible') s.tint = 0xffffff;
+                else if (tile.fogStatus === 'seen') s.tint = 0x333333;
+                else s.tint = 0x000000;
+            }
+        });
+    }
 
-        gameState.workers.employed = workersCurrentlyActive;
-        hud.update(gameState);
-    }, MAP_SETTINGS.tickRate);
+    function updateInfraView() {
+        infraLayer.removeChildren();
+        hexDataMap.forEach(tile => {
+            if (tile.fogStatus === 'unseen') return;
+            if (tile.infrastructure === 'road') {
+                const r = new Graphics().beginFill(0x444444).drawCircle(0, 0, 6).endFill();
+                r.position.set(tile.x, tile.y); infraLayer.addChild(r);
+            }
+            if (tile.infrastructure === 'castle') {
+                const c = new PIXI.Sprite(loadedAssets['castle_main.png']);
+                c.anchor.set(0.5, 0.8); c.position.set(tile.x, tile.y);
+                c.height = 60; c.scale.x = c.scale.y; infraLayer.addChild(c);
+            }
+            if (tile.hasWorker) {
+                const w = new Graphics().beginFill(0xFFD700).lineStyle(2, 0x000000).drawCircle(0, 0, 10).endFill();
+                w.position.set(tile.x, tile.y); infraLayer.addChild(w);
+            }
+        });
+    }
 
-    // --- TICKER & INTERAKTION ---
-    let time = 0;
-    app.ticker.add((ticker) => {
-        time += ticker.deltaTime * 0.04;
-        animatedDecos.forEach((d, i) => d.skew.x = Math.sin(time + i * 0.2) * 0.03);
-    });
+    updateVisibility(); updateInfraView();
 
+    // --- INTERACTION ---
     app.stage.eventMode = 'static';
-    app.stage.hitArea = app.screen;
-    let hoverText = '';
+    app.stage.on('pointertap', (e) => {
+        if (e.button !== 0) return; // Nur Linksklick
+
+        const localPos = worldContainer.toLocal(e.global);
+        const q = Math.round((Math.sqrt(3)/3 * localPos.x - 1/3 * localPos.y) / MAP_SETTINGS.hexSize);
+        const r = Math.round((2/3 * localPos.y) / MAP_SETTINGS.hexSize);
+        const tile = hexDataMap.get(`${q},${r}`);
+        
+        if (gameState.activeTool === 'none') return;
+        if (!tile || (tile.fogStatus === 'unseen' && (gameState.activeTool as string) !== 'none')) return;
+
+        if (gameState.activeTool === 'road') {
+            if (tile.infrastructure === 'none' && gameState.resources.wood >= 5) {
+                const connected = getNeighbors(q, r).some(n => {
+                    const nt = hexDataMap.get(`${n.q},${n.r}`);
+                    return nt && nt.infrastructure !== 'none';
+                });
+                if (connected) { gameState.resources.wood -= 5; tile.infrastructure = 'road'; }
+            }
+        } else if (gameState.activeTool === 'worker_add') {
+            if (tile.infrastructure === 'none' && !tile.hasWorker && gameState.workers.employed < gameState.workers.total) {
+                const nearInfr = getNeighbors(q, r).some(n => {
+                    const nt = hexDataMap.get(`${n.q},${n.r}`);
+                    return nt && (nt.infrastructure === 'road' || nt.infrastructure === 'castle');
+                });
+                if (nearInfr) { tile.hasWorker = true; }
+            }
+        } else if (gameState.activeTool === 'worker_remove') {
+            tile.hasWorker = false;
+        } else if (gameState.activeTool === 'demolish') {
+            if (tile.infrastructure !== 'castle') { tile.infrastructure = 'none'; tile.hasWorker = false; }
+        }
+        updateVisibility(); updateInfraView();
+        hud.update(gameState, currentHoverText);
+    });
 
     app.stage.on('pointermove', (e) => {
         const localPos = worldContainer.toLocal(e.global);
         const q = Math.round((Math.sqrt(3)/3 * localPos.x - 1/3 * localPos.y) / MAP_SETTINGS.hexSize);
         const r = Math.round((2/3 * localPos.y) / MAP_SETTINGS.hexSize);
         const data = hexDataMap.get(`${q},${r}`);
-        
-        if (data) {
-            hoverText = `Biom: ${data.biome.name} | Resource: ${data.resourceType}`;
-            if (data.hasWorker) hoverText += ` | 👷 AKTIV`;
-        } else {
-            hoverText = '';
-        }
-        hud.update(gameState, hoverText);
+        if (data && data.fogStatus !== 'unseen') {
+            hoverHighlight.visible = true; hoverHighlight.position.set(data.x, data.y);
+            currentHoverText = `${data.biome.name} | Tool: ${gameState.activeTool}`;
+        } else { hoverHighlight.visible = false; }
+        hud.update(gameState, currentHoverText);
     });
 
-    // Kamera-Controls (Bleiben gleich)
-    let isDragging = false, dragStart = { x: 0, y: 0 }, containerStart = { x: 0, y: 0 };
-    app.stage.on('pointerdown', (e) => {
-        isDragging = true;
-        dragStart = { x: e.global.x, y: e.global.y };
-        containerStart = { x: worldContainer.x, y: worldContainer.y };
+    // --- RESOURCE TICKER ---
+    setInterval(() => {
+        let count = 0;
+        hexDataMap.forEach(tile => {
+            if (tile.hasWorker) {
+                count++;
+                const bName = tile.biome.name;
+                if (bName.includes('Forest')) gameState.resources.wood += 1;
+                else if (bName === 'Mountain') gameState.resources.iron += 0.2;
+                else if (bName === 'Grassland') gameState.resources.stone += 0.5;
+            }
+        });
+        gameState.workers.employed = count;
+        hud.update(gameState, currentHoverText);
+    }, 1000);
+
+    // --- CAMERA ---
+    let isDrag = false, dS = { x: 0, y: 0 }, cS = { x: 0, y: 0 };
+    app.stage.on('pointerdown', (e) => { 
+        if(e.button === 0 && gameState.activeTool === 'none') { 
+            isDrag = true; dS = { x: e.global.x, y: e.global.y }; cS = { x: worldContainer.x, y: worldContainer.y }; 
+        }
     });
-    app.stage.on('pointermove', (e) => {
-        if (!isDragging) return;
-        worldContainer.x = containerStart.x + (e.global.x - dragStart.x);
-        worldContainer.y = containerStart.y + (e.global.y - dragStart.y);
-    });
-    app.stage.on('pointerup', () => isDragging = false);
+    app.stage.on('pointermove', (e) => { if (isDrag) { worldContainer.x = cS.x + (e.global.x - dS.x); worldContainer.y = cS.y + (e.global.y - dS.y); }});
+    app.stage.on('pointerup', () => isDrag = false);
     app.canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const zoom = Math.pow(1.1, -e.deltaY / 100);
-        const newScale = worldContainer.scale.x * zoom;
-        if (newScale > 0.05 && newScale < 4) worldContainer.scale.set(newScale);
+        const next = worldContainer.scale.x * zoom;
+        if (next > 0.05 && next < 3) {
+            const lp = worldContainer.toLocal({x: e.clientX, y: e.clientY});
+            worldContainer.scale.set(next);
+            const ng = worldContainer.toGlobal(lp);
+            worldContainer.x += e.clientX - ng.x; worldContainer.y += e.clientY - ng.y;
+        }
     }, { passive: false });
 }
 

@@ -6,10 +6,12 @@ export const MAP_SETTINGS = {
     mapHeight: 80,
     noiseScale: 0.06,
     overlap: 1.02,
-    tickRate: 1000 // 1000ms = 1 Sekunde
+    tickRate: 1000,
+    castleStart: { q: 60, r: 40 }
 };
 
-export type InfrastructureType = 'none' | 'road' | 'castle' | 'tower';
+// Nur noch die Kern-Infrastruktur
+export type InfrastructureType = 'none' | 'road' | 'castle';
 export type FogStatus = 'unseen' | 'seen' | 'visible';
 
 export interface WorldTileData {
@@ -19,7 +21,7 @@ export interface WorldTileData {
     y: number;
     biome: any;
     infrastructure: InfrastructureType;
-    hasWorker: boolean;
+    hasWorker: boolean; 
     fogStatus: FogStatus;
     resourceType: 'wood' | 'stone' | 'iron' | 'none';
 }
