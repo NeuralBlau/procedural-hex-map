@@ -74,7 +74,6 @@ async function init() {
     const uiLayer = new PIXI.Container();
 
     worldContainer.addChild(groundLayer, infraLayer, interactionLayer);
-    // UI Layer nach dem World Container hinzufügen, damit es oben liegt
     app.stage.addChild(worldContainer);
     app.stage.addChild(uiLayer);
     uiLayer.addChild(hud.getContainer());
@@ -85,7 +84,7 @@ async function init() {
         hud.update(gameState, currentHoverText);
     });
 
-    // --- 2. ASSETS LADEN ---
+    // --- 2. ASSETS & TEXTURES ---
     const assetAliases = new Set<string>();
     BIOMES.forEach(b => { if (b.tileAsset) assetAliases.add(b.tileAsset); });
     assetAliases.add('castle_main.png'); 
@@ -114,7 +113,6 @@ async function init() {
             let val = (noise2D(axialQ * MAP_SETTINGS.noiseScale, axialR * MAP_SETTINGS.noiseScale) + 1) / 2;
             let biome = getBiome(val);
 
-            // Startbereich sichern (kein Wasser unter der Burg)
             const dq = axialQ - startQ;
             const dr = axialR - startR;
             const dist = (Math.abs(dq) + Math.abs(dq + dr) + Math.abs(dr)) / 2;
@@ -173,7 +171,7 @@ async function init() {
     }
     createToolbar();
 
-    // --- 5. VISUAL UPDATES ---
+    // --- 5. UPDATES ---
     function updateVisibility() {
         hexDataMap.forEach(tile => { if (tile.fogStatus === 'visible') tile.fogStatus = 'seen'; });
         hexDataMap.forEach(tile => {
@@ -207,14 +205,23 @@ async function init() {
                 c.height = 60; c.scale.x = c.scale.y; infraLayer.addChild(c);
             }
             if (tile.hasWorker) {
-                const isWater = tile.biome.name === 'WATER' || tile.biome.name === 'DEEP_WATER';
+                const isWater = tile.biome.name.includes('WATER');
                 const w = new Graphics().beginFill(isWater ? 0x00FFFF : 0xFFD700).lineStyle(2, 0x000000).drawCircle(0, 0, 10).endFill();
                 w.position.set(tile.x, tile.y); infraLayer.addChild(w);
             }
         });
     }
 
-    // --- 6. INTERACTION & INPUT ---
+    // --- 6. KAMERA ZENTRIERUNG AUF BURG ---
+    const centerCameraOnCastle = () => {
+        const castleTile = Array.from(hexDataMap.values()).find(t => t.infrastructure === 'castle');
+        if (castleTile) {
+            worldContainer.x = app.screen.width / 2 - castleTile.x * worldContainer.scale.x;
+            worldContainer.y = app.screen.height / 2 - castleTile.y * worldContainer.scale.y;
+        }
+    };
+
+    // --- 7. INPUT & INTERACTION ---
     app.stage.eventMode = 'static';
     app.stage.on('pointertap', (e) => {
         if (e.button !== 0) return;
@@ -244,7 +251,7 @@ async function init() {
         hud.update(gameState, currentHoverText);
     });
 
-    // --- 7. RESSOURCEN TICKER (Wirtschaftssystem Prio 2) ---
+    // --- 8. WIRTSCHAFTSTICKER ---
     setInterval(() => {
         let activeWorkers = 0;
         let income = { wood: 0, stone: 0, iron: 0, food: 0 };
@@ -269,7 +276,7 @@ async function init() {
         hud.update(gameState, currentHoverText);
     }, 1000);
 
-    // --- 8. KAMERA & ZOOM ---
+    // --- 9. KAMERA CONTROL ---
     let isDrag = false, dragStart = { x: 0, y: 0 }, camStart = { x: 0, y: 0 };
     app.stage.on('pointerdown', (e) => { 
         if(e.button === 0 && gameState.activeTool === 'none') { 
@@ -281,7 +288,7 @@ async function init() {
 
     app.canvas.addEventListener('wheel', (e: WheelEvent) => {
         e.preventDefault();
-        const zoomFactor = Math.pow(1.1, -e.deltaY * 0.01);
+        const zoomFactor = Math.pow(1.1, -e.deltaY * 0.001);
         const nextScale = worldContainer.scale.x * zoomFactor;
         if (nextScale > 0.1 && nextScale < 3) {
             const mousePos = { x: e.clientX, y: e.clientY };
@@ -293,8 +300,11 @@ async function init() {
         }
     }, { passive: false });
 
-    updateVisibility(); updateInfraView();
-    hud.update(gameState, "Willkommen!");
+    // Initialisierung abschließen
+    updateVisibility(); 
+    updateInfraView();
+    centerCameraOnCastle(); // Jetzt zentrieren
+    hud.update(gameState, "Willkommen in Hex Castle!");
 }
 
 init();
