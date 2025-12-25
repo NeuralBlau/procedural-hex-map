@@ -14,7 +14,7 @@ import { VisibilitySystem } from './systems/VisibilitySystem';
 import { InfrastructureRenderer } from './systems/InfrastructureRenderer';
 import { InteractionSystem } from './systems/InteractionSystem';
 import { CameraController } from './systems/CameraController';
-import { Toolbar } from './ui/Toolbar';
+import { Toolbar } from './ui/Toolbar.ts';
 
 const noise2D = createNoise2D();
 TextureStyle.defaultOptions.scaleMode = 'nearest';
