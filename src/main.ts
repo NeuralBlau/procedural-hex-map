@@ -40,6 +40,7 @@ async function init() {
     app.stage.addChild(worldContainer);
     app.stage.addChild(uiLayer);
     uiLayer.addChild(hud.getContainer());
+    uiLayer.addChild(hud.getStatusOverlay());
 
     window.addEventListener('contextmenu', (e) => {
         e.preventDefault();
@@ -152,9 +153,13 @@ async function init() {
 
     app.ticker.add(() => {
         if (gameState.gameStatus !== 'playing') {
-            if (gameState.gameStatus === 'lost') {
-                hud.update(gameState, "GAME OVER - Die Seuche hat gesiegt!");
-            }
+            return;
+        }
+
+        // Check for win condition
+        if (gameState.victoryPoints >= gameState.winThreshold) {
+            gameState.gameStatus = 'won';
+            hud.update(gameState, currentHoverText);
             return;
         }
 

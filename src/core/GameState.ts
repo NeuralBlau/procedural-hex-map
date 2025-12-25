@@ -12,7 +12,7 @@ export interface Workers {
     employed: number;
 }
 
-export type ToolType = 'road' | 'camp' | 'worker_add' | 'worker_remove' | 'demolish' | 'none';
+export type ToolType = 'road' | 'camp' | 'temple' | 'worker_add' | 'worker_remove' | 'demolish' | 'none';
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export class GameState {
@@ -21,6 +21,8 @@ export class GameState {
     public activeTool: ToolType;
     public gameStatus: GameStatus;
     public infectedTileCount: number;
+    public victoryPoints: number;
+    public winThreshold: number;
 
     constructor() {
         this.resources = { wood: 200, stone: 50, iron: 20, food: 100 };
@@ -28,6 +30,8 @@ export class GameState {
         this.activeTool = 'none';
         this.gameStatus = 'playing';
         this.infectedTileCount = 0;
+        this.victoryPoints = 0;
+        this.winThreshold = 100;
     }
 
     // Resource management

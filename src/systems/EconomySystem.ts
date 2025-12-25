@@ -14,9 +14,13 @@ export class EconomySystem {
     // Process one economy tick (called every second)
     tick(): void {
         let activeWorkers = 0;
+        let temples = 0;
         let income = { wood: 0, stone: 0, iron: 0, food: 0 };
 
         this.hexDataMap.forEach(tile => {
+            if (tile.infrastructure === 'temple') {
+                temples++;
+            }
             if (tile.hasWorker) {
                 activeWorkers++;
                 switch (tile.biome.name) {
@@ -52,6 +56,7 @@ export class EconomySystem {
             this.gameState.resources.food = 0;
         }
 
+        this.gameState.victoryPoints += temples * 2;
         this.gameState.workers.employed = activeWorkers;
     }
 }

@@ -20,20 +20,25 @@ export class InteractionSystem {
             return false;
         }
 
-        // Building tools (road, camp)
-        if (this.gameState.activeTool === 'road' || this.gameState.activeTool === 'camp') {
+        // Building tools (road, camp, temple)
+        if (['road', 'camp', 'temple'].includes(this.gameState.activeTool)) {
             if (tile.biome.name.includes('WATER')) return false;
 
-            const buildingType = this.gameState.activeTool;
-            const cost = BUILDINGS[buildingType].cost.wood;
+            const buildingType = this.gameState.activeTool as keyof typeof BUILDINGS;
+            const cost = BUILDINGS[buildingType].cost;
 
-            if (tile.infrastructure === 'none' && this.gameState.resources.wood >= cost) {
+            // Check all costs (wood, stone, iron)
+            const hasWood = !cost.wood || this.gameState.resources.wood >= cost.wood;
+            const hasStone = !cost.stone || this.gameState.resources.stone >= cost.stone;
+            const hasIron = !cost.iron || this.gameState.resources.iron >= cost.iron;
+
+            if (tile.infrastructure === 'none' && hasWood && hasStone && hasIron) {
                 if (this.gameState.activeTool === 'road') {
                     // Road must be adjacent to existing infrastructure
                     if (HexUtils.getNeighbors(q, r).some(n =>
                         this.hexDataMap.get(`${n.q},${n.r}`)?.infrastructure !== 'none'
                     )) {
-                        this.gameState.resources.wood -= cost;
+                        this.gameState.subtractResource('wood', cost.wood || 0);
                         tile.infrastructure = 'road';
                         return true;
                     }
@@ -41,8 +46,18 @@ export class InteractionSystem {
                     // Camp must be 3+ tiles away from building via roads
                     const d = HexUtils.getPathDistanceToBuilding(q, r, this.hexDataMap);
                     if (d >= 3 && d !== Infinity) {
-                        this.gameState.resources.wood -= cost;
+                        this.gameState.subtractResource('wood', cost.wood || 0);
                         tile.infrastructure = 'camp';
+                        return true;
+                    }
+                } else if (this.gameState.activeTool === 'temple') {
+                    // Temple must be 3+ tiles away from building (no road requirement mentioned, using distance)
+                    const d = HexUtils.getPathDistanceToBuilding(q, r, this.hexDataMap);
+                    if (d >= 3 && d !== Infinity) {
+                        if (cost.wood) this.gameState.subtractResource('wood', cost.wood);
+                        if (cost.stone) this.gameState.subtractResource('stone', cost.stone);
+                        if (cost.iron) this.gameState.subtractResource('iron', cost.iron);
+                        tile.infrastructure = 'temple';
                         return true;
                     }
                 }

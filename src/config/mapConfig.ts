@@ -11,7 +11,7 @@ export const MAP_SETTINGS = {
 };
 
 // Nur noch die Kern-Infrastruktur
-export type InfrastructureType = 'none' | 'road' | 'castle' | 'camp';
+export type InfrastructureType = 'none' | 'road' | 'castle' | 'camp' | 'temple';
 export type FogStatus = 'unseen' | 'seen' | 'visible';
 export type VirusStatus = 'clean' | 'infected';
 

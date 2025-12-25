@@ -55,6 +55,13 @@ export class InfrastructureRenderer {
                 castle.height = 60;
                 castle.scale.x = castle.scale.y;
                 this.infraLayer.addChild(castle);
+            } else if (tile.infrastructure === 'temple') {
+                const temple = new PIXI.Graphics();
+                temple.beginFill(0x00FF00); // Bright green dot
+                temple.drawCircle(0, 0, 15);
+                temple.endFill();
+                temple.position.set(tile.x, tile.y);
+                this.infraLayer.addChild(temple);
             }
 
             // Render workers on top
