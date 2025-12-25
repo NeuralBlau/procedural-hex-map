@@ -50,7 +50,7 @@ export class EconomySystem {
         this.gameState.resources.wood += income.wood;
         this.gameState.resources.stone += income.stone;
         this.gameState.resources.iron += income.iron;
-        this.gameState.resources.food += (income.food - (activeWorkers * 0.5));
+        this.gameState.resources.food += income.food;
 
         if (this.gameState.resources.food < 0) {
             this.gameState.resources.food = 0;

@@ -68,9 +68,14 @@ export class VirusSystem {
 
     private spreadVirus(): void {
         const infectedTiles: WorldTileData[] = [];
+        const towers: WorldTileData[] = [];
+
         for (const tile of this.hexDataMap.values()) {
             if (tile.virusStatus === 'infected') {
                 infectedTiles.push(tile);
+            }
+            if (tile.infrastructure === 'tower') {
+                towers.push(tile);
             }
         }
 
@@ -82,7 +87,7 @@ export class VirusSystem {
 
         // Get neighbors and find clean ones
         const neighbors = HexUtils.getNeighbors(sourceTile.q, sourceTile.r);
-        const cleanNeighbors: WorldTileData[] = [];
+        let cleanNeighbors: WorldTileData[] = [];
 
         for (const pos of neighbors) {
             const neighbor = this.hexDataMap.get(`${pos.q},${pos.r}`);
@@ -90,7 +95,12 @@ export class VirusSystem {
                 if (VIRUS_CONFIG.WATER_BLOCKS_SPREAD && (neighbor.biome.name === 'WATER' || neighbor.biome.name === 'DEEP_WATER')) {
                     continue;
                 }
-                cleanNeighbors.push(neighbor);
+
+                // Check if protected by tower
+                const isProtected = towers.some(tower => this.getDistance(neighbor, tower) <= 3);
+                if (!isProtected) {
+                    cleanNeighbors.push(neighbor);
+                }
             }
         }
 
@@ -112,5 +122,9 @@ export class VirusSystem {
         if (infectionPercent >= VIRUS_CONFIG.LOSE_THRESHOLD_PERCENT) {
             this.gameState.gameStatus = 'lost';
         }
+    }
+
+    private getDistance(a: WorldTileData, b: WorldTileData): number {
+        return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - (b.q + b.r)) + Math.abs(a.r - b.r)) / 2;
     }
 }

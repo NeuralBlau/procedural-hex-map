@@ -1,4 +1,5 @@
 import * as PIXI from 'pixi.js';
+import { CASTLE_UPGRADES } from '../config/buildings';
 
 export class HUD {
     private container: PIXI.Container;
@@ -11,9 +12,16 @@ export class HUD {
     private toolText: PIXI.Text;
     private victoryText: PIXI.Text;
     private virusText: PIXI.Text;
+    private castleText: PIXI.Text;
+    private upgradePanel: PIXI.Container;
+    private upgradeBtn: PIXI.Graphics;
+    private upgradeBtnText: PIXI.Text;
     private hoverText: PIXI.Text;
     private statusOverlay: PIXI.Container;
     private statusText: PIXI.Text;
+
+    private lastGameState: any;
+    private lastHover: string = "";
 
     private readonly PADDING = 15;
     private readonly SPACING = 10;
@@ -75,14 +83,80 @@ export class HUD {
 
         this.statusText = new PIXI.Text({
             text: '',
-            style: { ...baseStyle, fontSize: 48, fontWeight: 'bold', align: 'center' }
+            style: { ...baseStyle, fontSize: 48, fontWeight: 'bold', align: 'center', lineHeight: 60 }
         });
         this.statusText.anchor.set(0.5);
 
         this.statusOverlay.addChild(overlayBg, this.statusText);
 
-        this.container.addChild(this.titleText, this.resourceText, this.workerText, this.toolText, this.victoryText, this.virusText, this.hoverText);
-        // Do not add statusOverlay to container, it should be relative to screen. We'll handle it in update or main.
+        // 9. Castle Info
+        this.castleText = new PIXI.Text({ text: '', style: { ...baseStyle, fill: '#00ccff', fontWeight: 'bold' } });
+
+        // 10. Upgrade Panel
+        this.upgradePanel = new PIXI.Container();
+        this.upgradeBtn = new PIXI.Graphics();
+        this.upgradeBtn.eventMode = 'static';
+        this.upgradeBtn.cursor = 'pointer';
+
+        this.upgradeBtnText = new PIXI.Text({
+            text: '',
+            style: { ...baseStyle, fontSize: 12, fontWeight: 'bold' }
+        });
+        this.upgradeBtnText.anchor.set(0.5);
+        this.upgradeBtnText.eventMode = 'none'; // Ensure text doesn't steal clicks
+        this.upgradePanel.addChild(this.upgradeBtn, this.upgradeBtnText);
+
+        this.upgradeBtn.hitArea = new PIXI.Rectangle(0, 0, 190, 25); // Stable hit area
+
+        this.container.addChild(
+            this.titleText,
+            this.resourceText,
+            this.workerText,
+            this.toolText,
+            this.victoryText,
+            this.virusText,
+            this.castleText,
+            this.upgradePanel,
+            this.hoverText
+        );
+
+        // Setup Upgrade Click Handler once
+        this.upgradeBtn.on('pointertap', (e) => {
+            console.log("HUD: Upgrade button pressed");
+            e.stopPropagation();
+            if (!this.lastGameState) {
+                console.warn("HUD: No lastGameState found!");
+                return;
+            }
+
+            const nextUpgrade = CASTLE_UPGRADES.find(u => u.level === this.lastGameState.castleLevel + 1);
+            if (!nextUpgrade) {
+                console.log("HUD: No more upgrades available");
+                return;
+            }
+
+            const canAfford = this.lastGameState.canUpgradeCastle(nextUpgrade.cost);
+            console.log(`HUD: Upgrade attempt to level ${nextUpgrade.level}. canAfford: ${canAfford}`);
+
+            if (canAfford) {
+                console.log("HUD: Executing upgrade...");
+                this.lastGameState.upgradeCastle(nextUpgrade.cost, nextUpgrade.workerBoost);
+                this.update(this.lastGameState, this.lastHover);
+            }
+        });
+
+        // Hover effects
+        this.upgradeBtn.on('pointerover', () => {
+            if (this.lastGameState) {
+                const nextUpgrade = CASTLE_UPGRADES.find(u => u.level === this.lastGameState.castleLevel + 1);
+                if (nextUpgrade && this.lastGameState.canUpgradeCastle(nextUpgrade.cost)) {
+                    this.upgradeBtn.alpha = 0.8;
+                }
+            }
+        });
+        this.upgradeBtn.on('pointerout', () => {
+            this.upgradeBtn.alpha = 1.0;
+        });
     }
 
     public getStatusOverlay() {
@@ -123,6 +197,7 @@ export class HUD {
             'none': 'Kamera',
             'road': 'Bau: Straße (10)',
             'camp': 'Bau: Lager (50)',
+            'tower': 'Bau: Turm (50H, 50S, 20E)',
             'temple': 'Bau: Tempel (100H, 100S, 50E)',
             'worker_add': 'Arbeiter +',
             'worker_remove': 'Arbeiter -',
@@ -140,8 +215,35 @@ export class HUD {
         this.virusText.text = `🦠 Seuche: ${gameState.infectedTileCount} / ${Math.floor(totalTiles * 0.05)} (${virusProgress}%)`;
         this.virusText.position.set(this.PADDING, this.victoryText.y + this.victoryText.height + 5);
 
+        this.castleText.text = `🏰 Burg Level: ${gameState.castleLevel}`;
+        this.castleText.position.set(this.PADDING, this.virusText.y + this.virusText.height + 5);
+
+        this.lastGameState = gameState;
+        this.lastHover = currentHover;
+
+        const nextUpgrade = CASTLE_UPGRADES.find(u => u.level === gameState.castleLevel + 1);
+        if (nextUpgrade) {
+            this.upgradePanel.visible = true;
+            this.upgradePanel.position.set(this.PADDING, this.castleText.y + this.castleText.height + this.SPACING);
+
+            const canAfford = gameState.canUpgradeCastle(nextUpgrade.cost);
+            const costStr = Object.entries(nextUpgrade.cost).map(([k, v]) => `${v}${k[0].toUpperCase()}`).join(' ');
+            this.upgradeBtnText.text = `UPGRADE Lvl ${nextUpgrade.level} (${costStr})`;
+
+            this.upgradeBtn.clear();
+            this.upgradeBtn.beginFill(canAfford ? 0x00aa00 : 0x444444);
+            this.upgradeBtn.drawRoundedRect(0, 0, 190, 25, 3);
+            this.upgradeBtn.endFill();
+            this.upgradeBtnText.position.set(95, 12.5);
+
+            this.upgradeBtn.alpha = canAfford ? 1.0 : 0.5;
+        } else {
+            this.upgradePanel.visible = false;
+        }
+
         this.hoverText.text = currentHover ? `Info: ${currentHover}` : '';
-        this.hoverText.position.set(this.PADDING, this.virusText.y + this.virusText.height + this.SPACING);
+        const panelBottom = this.upgradePanel.visible ? this.upgradePanel.y + 25 : this.castleText.y + this.castleText.height;
+        this.hoverText.position.set(this.PADDING, panelBottom + this.SPACING);
 
         // Update status overlay
         if (gameState.gameStatus !== 'playing') {

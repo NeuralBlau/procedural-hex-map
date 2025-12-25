@@ -12,7 +12,7 @@ export interface Workers {
     employed: number;
 }
 
-export type ToolType = 'road' | 'camp' | 'temple' | 'worker_add' | 'worker_remove' | 'demolish' | 'none';
+export type ToolType = 'road' | 'camp' | 'temple' | 'tower' | 'worker_add' | 'worker_remove' | 'demolish' | 'none';
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export class GameState {
@@ -23,6 +23,7 @@ export class GameState {
     public infectedTileCount: number;
     public victoryPoints: number;
     public winThreshold: number;
+    public castleLevel: number;
 
     constructor() {
         this.resources = { wood: 200, stone: 50, iron: 20, food: 100 };
@@ -32,6 +33,7 @@ export class GameState {
         this.infectedTileCount = 0;
         this.victoryPoints = 0;
         this.winThreshold = 100;
+        this.castleLevel = 1;
     }
 
     // Resource management
@@ -49,6 +51,21 @@ export class GameState {
 
     hasResource(type: keyof Resources, amount: number): boolean {
         return this.resources[type] >= amount;
+    }
+
+    // Castle leveling
+    canUpgradeCastle(cost: Resources): boolean {
+        return (cost.wood === undefined || this.resources.wood >= cost.wood) &&
+            (cost.stone === undefined || this.resources.stone >= cost.stone) &&
+            (cost.iron === undefined || this.resources.iron >= cost.iron);
+    }
+
+    upgradeCastle(cost: Resources, workerBoost: number): void {
+        if (cost.wood) this.resources.wood -= cost.wood;
+        if (cost.stone) this.resources.stone -= cost.stone;
+        if (cost.iron) this.resources.iron -= cost.iron;
+        this.castleLevel++;
+        this.workers.total += workerBoost;
     }
 
     // Worker management

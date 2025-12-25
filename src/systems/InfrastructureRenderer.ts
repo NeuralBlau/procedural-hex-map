@@ -62,6 +62,13 @@ export class InfrastructureRenderer {
                 temple.endFill();
                 temple.position.set(tile.x, tile.y);
                 this.infraLayer.addChild(temple);
+            } else if (tile.infrastructure === 'tower') {
+                const tower = new PIXI.Graphics();
+                tower.beginFill(0xA020F0); // Purple dot (Lila)
+                tower.drawCircle(0, 0, 15);
+                tower.endFill();
+                tower.position.set(tile.x, tile.y);
+                this.infraLayer.addChild(tower);
             }
 
             // Render workers on top
