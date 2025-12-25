@@ -50,6 +50,11 @@ async function init() {
     const assetAliases = new Set<string>();
     BIOMES.forEach(b => { if (b.tileAsset) assetAliases.add(b.tileAsset); });
     assetAliases.add('castle_main.png');
+    assetAliases.add('worker.png');
+    assetAliases.add('fisher.png');
+    assetAliases.add('camp.png');
+    assetAliases.add('node.png');
+    assetAliases.add('road.png');
     for (const alias of assetAliases) PIXI.Assets.add({ alias, src: `/assets/${alias}` });
     const loadedAssets = await PIXI.Assets.load([...assetAliases]);
 
