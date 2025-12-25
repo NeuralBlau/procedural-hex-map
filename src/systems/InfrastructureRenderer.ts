@@ -24,7 +24,7 @@ export class InfrastructureRenderer {
 
         // First pass: Render road connections (behind everything)
         this.hexDataMap.forEach(tile => {
-            if (tile.fogStatus === 'unseen') return;
+            if (tile.fogStatus === 'unseen' || tile.virusStatus === 'infected') return;
             if (tile.infrastructure === 'road' || tile.infrastructure === 'camp' || tile.infrastructure === 'castle') {
                 this.renderRoadConnections(tile);
             }
@@ -32,7 +32,7 @@ export class InfrastructureRenderer {
 
         // Second pass: Render infrastructure nodes
         this.hexDataMap.forEach(tile => {
-            if (tile.fogStatus === 'unseen') return;
+            if (tile.fogStatus === 'unseen' || tile.virusStatus === 'infected') return;
 
             if (tile.infrastructure === 'road') {
                 const node = new PIXI.Sprite(this.loadedAssets['camp.png']);

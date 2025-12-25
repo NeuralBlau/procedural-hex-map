@@ -12,6 +12,7 @@ import { GameState } from './core/GameState';
 import { EconomySystem } from './systems/EconomySystem';
 import { VisibilitySystem } from './systems/VisibilitySystem';
 import { InfrastructureRenderer } from './systems/InfrastructureRenderer';
+import { VirusSystem } from './systems/VirusSystem';
 import { InteractionSystem } from './systems/InteractionSystem';
 import { CameraController } from './systems/CameraController';
 import { Toolbar } from './ui/Toolbar.ts';
@@ -95,7 +96,8 @@ async function init() {
                 infrastructure: isCastleStart ? 'castle' : 'none',
                 hasWorker: false,
                 fogStatus: 'unseen',
-                resourceType: 'none'
+                resourceType: 'none',
+                virusStatus: 'clean'
             };
             hexDataMap.set(`${axialQ},${axialR}`, tileData);
 
@@ -114,6 +116,8 @@ async function init() {
     const infraRenderer = new InfrastructureRenderer(hexDataMap, infraLayer, loadedAssets);
     const interactionSystem = new InteractionSystem(hexDataMap, gameState);
     const cameraController = new CameraController(worldContainer, app);
+    const virusSystem = new VirusSystem(hexDataMap, gameState);
+    virusSystem.initialize();
 
     // --- 5. TOOLBAR ---
     const toolbar = new Toolbar(TOOLS, gameState, hud, currentHoverText);
@@ -135,11 +139,31 @@ async function init() {
         }
     });
 
-    // --- 7. ECONOMY TICKER ---
+    // --- 7. ECONOMY & VIRUS TICKER ---
     setInterval(() => {
+        if (gameState.gameStatus !== 'playing') return;
+
         economySystem.tick();
+
+        // Virus needs high precision timing, but for now we use the same interval 
+        // or a nested update call. Let's use app.ticker for smoother virus spread check.
         hud.update(gameState, currentHoverText);
     }, 1000);
+
+    app.ticker.add(() => {
+        if (gameState.gameStatus !== 'playing') {
+            if (gameState.gameStatus === 'lost') {
+                hud.update(gameState, "GAME OVER - Die Seuche hat gesiegt!");
+            }
+            return;
+        }
+
+        if (virusSystem.update(app.ticker.lastTime)) {
+            visibilitySystem.update();
+            infraRenderer.update();
+            hud.update(gameState, currentHoverText);
+        }
+    });
 
     // --- 8. CAMERA CONTROLS ---
     cameraController.setupControls(app.stage, () => gameState.activeTool !== 'none');

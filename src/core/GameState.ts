@@ -13,16 +13,21 @@ export interface Workers {
 }
 
 export type ToolType = 'road' | 'camp' | 'worker_add' | 'worker_remove' | 'demolish' | 'none';
+export type GameStatus = 'playing' | 'won' | 'lost';
 
 export class GameState {
     public resources: Resources;
     public workers: Workers;
     public activeTool: ToolType;
+    public gameStatus: GameStatus;
+    public infectedTileCount: number;
 
     constructor() {
         this.resources = { wood: 200, stone: 50, iron: 20, food: 100 };
         this.workers = { total: 10, employed: 0 };
         this.activeTool = 'none';
+        this.gameStatus = 'playing';
+        this.infectedTileCount = 0;
     }
 
     // Resource management

@@ -31,12 +31,16 @@ export class VisibilitySystem {
             }
         });
 
-        // Apply tint to sprites based on visibility
+        // Apply tint to sprites based on visibility and virus status
         this.hexDataMap.forEach(tile => {
             const s = this.tileSprites.get(`${tile.q},${tile.r}`);
             if (s) {
-                s.tint = tile.fogStatus === 'visible' ? 0xffffff :
-                    (tile.fogStatus === 'seen' ? 0x333333 : 0x000000);
+                if (tile.virusStatus === 'infected') {
+                    s.tint = 0x8B0000; // Dark red for infected
+                } else {
+                    s.tint = tile.fogStatus === 'visible' ? 0xffffff :
+                        (tile.fogStatus === 'seen' ? 0x333333 : 0x000000);
+                }
             }
         });
     }

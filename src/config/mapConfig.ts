@@ -13,6 +13,7 @@ export const MAP_SETTINGS = {
 // Nur noch die Kern-Infrastruktur
 export type InfrastructureType = 'none' | 'road' | 'castle' | 'camp';
 export type FogStatus = 'unseen' | 'seen' | 'visible';
+export type VirusStatus = 'clean' | 'infected';
 
 export interface WorldTileData {
     q: number;
@@ -21,9 +22,10 @@ export interface WorldTileData {
     y: number;
     biome: any;
     infrastructure: InfrastructureType;
-    hasWorker: boolean; 
+    hasWorker: boolean;
     fogStatus: FogStatus;
     resourceType: 'wood' | 'stone' | 'iron' | 'none';
+    virusStatus: VirusStatus;
 }
 
 export const BAKE_OFFSETS: Record<string, { x: number; y: number }> = {
