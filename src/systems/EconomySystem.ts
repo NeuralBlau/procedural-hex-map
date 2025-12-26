@@ -26,18 +26,18 @@ export class EconomySystem {
                 switch (tile.biome.name) {
                     case 'GRASS':
                         income.food += 1.0;
-                        this.gameState.resources.stone += 0.2;
+                        income.stone += 0.2;
                         break;
                     case 'FOREST':
-                        this.gameState.resources.wood += 1.0;
+                        income.wood += 1.0;
                         income.food += 0.2;
                         break;
                     case 'MOUNTAIN':
-                        this.gameState.resources.iron += 0.5;
-                        this.gameState.resources.stone += 0.8;
+                        income.iron += 0.5;
+                        income.stone += 0.8;
                         break;
                     case 'SAND':
-                        this.gameState.resources.stone += 0.1;
+                        income.stone += 0.1;
                         break;
                     case 'WATER':
                     case 'DEEP_WATER':
