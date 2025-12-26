@@ -57,6 +57,8 @@ async function init() {
     assetAliases.add('camp.png');
     assetAliases.add('node.png');
     assetAliases.add('road.png');
+    assetAliases.add('tower.png');
+    assetAliases.add('temple.png');
     for (const alias of assetAliases) PIXI.Assets.add({ alias, src: `/assets/${alias}` });
     const loadedAssets = await PIXI.Assets.load([...assetAliases]);
 

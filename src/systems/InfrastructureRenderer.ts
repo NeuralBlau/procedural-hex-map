@@ -35,14 +35,14 @@ export class InfrastructureRenderer {
             if (tile.fogStatus === 'unseen' || tile.virusStatus === 'infected') return;
 
             if (tile.infrastructure === 'road') {
-                const node = new PIXI.Sprite(this.loadedAssets['camp.png']);
+                const node = new PIXI.Sprite(this.loadedAssets['node.png']);
                 node.anchor.set(0.5);
                 node.position.set(tile.x, tile.y);
                 node.height = 24;
                 node.scale.x = node.scale.y;
                 this.infraLayer.addChild(node);
             } else if (tile.infrastructure === 'camp') {
-                const camp = new PIXI.Sprite(this.loadedAssets['node.png']);
+                const camp = new PIXI.Sprite(this.loadedAssets['camp.png']);
                 camp.anchor.set(0.5);
                 camp.position.set(tile.x, tile.y);
                 camp.height = 36;
@@ -56,25 +56,25 @@ export class InfrastructureRenderer {
                 castle.scale.x = castle.scale.y;
                 this.infraLayer.addChild(castle);
             } else if (tile.infrastructure === 'temple') {
-                const temple = new PIXI.Graphics();
-                temple.beginFill(0x00FF00); // Bright green dot
-                temple.drawCircle(0, 0, 15);
-                temple.endFill();
+                const temple = new PIXI.Sprite(this.loadedAssets['temple.png']);
+                temple.anchor.set(0.5, 0.7);
                 temple.position.set(tile.x, tile.y);
+                temple.height = 50;
+                temple.scale.x = temple.scale.y;
                 this.infraLayer.addChild(temple);
             } else if (tile.infrastructure === 'tower') {
-                const tower = new PIXI.Graphics();
-                tower.beginFill(0xA020F0); // Purple dot (Lila)
-                tower.drawCircle(0, 0, 15);
-                tower.endFill();
+                const tower = new PIXI.Sprite(this.loadedAssets['tower.png']);
+                tower.anchor.set(0.5, 0.8);
                 tower.position.set(tile.x, tile.y);
+                tower.height = 55;
+                tower.scale.x = tower.scale.y;
                 this.infraLayer.addChild(tower);
             }
 
             // Render workers on top
             if (tile.hasWorker) {
                 const isWater = tile.biome.name.includes('WATER');
-                const workerAsset = isWater ? 'fisher.png' : 'road.png';
+                const workerAsset = isWater ? 'fisher.png' : 'worker.png';
                 const worker = new PIXI.Sprite(this.loadedAssets[workerAsset]);
                 worker.anchor.set(0.5);
                 worker.position.set(tile.x, tile.y);
@@ -111,7 +111,7 @@ export class InfrastructureRenderer {
             const angle = Math.atan2(dy, dx);
 
             // Create road sprite
-            const road = new PIXI.Sprite(this.loadedAssets['worker.png']);
+            const road = new PIXI.Sprite(this.loadedAssets['road.png']);
             road.anchor.set(0.5);
             road.position.set(midX, midY);
             road.rotation = angle;
